@@ -1,0 +1,10 @@
+{
+  "description": "This web application guides users through step-by-step instructions for various tasks, enhancing productivity and ensuring clarity for all skill levels.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
