@@ -8,13 +8,13 @@ const supabaseAnonKey =
 
 if (!supabaseUrl) {
     throw new Error(
-        'Falta VITE_SUPABASE_URL en .env.local',
+        'Falta VITE_SUPABASE_URL en .env',
     );
 }
 
 if (!supabaseAnonKey) {
     throw new Error(
-        'Falta VITE_SUPABASE_ANON_KEY en .env.local',
+        'Falta VITE_SUPABASE_ANON_KEY en .env',
     );
 }
 
