@@ -763,15 +763,6 @@ export default function AuthModal({
                                         : 'Iniciar sesión'
                             }
                         />
-
-                        <button
-                            type="button"
-                            className="auth-modal-close"
-                            onClick={onClose}
-                            aria-label="Cerrar"
-                        >
-                            <CloseIcon />
-                        </button>
                     </div>
 
                     <div className="auth-modal-brand">

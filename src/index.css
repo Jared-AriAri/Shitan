@@ -633,7 +633,9 @@ svg {
 
 .mobile-dock-wrapper {
   position: relative;
+  display: flex;
   width: 100%;
+  justify-content: center;
   padding:
     8px 12px calc(10px + env(safe-area-inset-bottom));
   background:
@@ -1532,16 +1534,18 @@ img.appbar-simple-logo {
 .premium-nav-container {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   width: 100%;
   max-width: var(--content-width);
   height: 76px;
   margin: 0 auto;
   padding: 0 32px;
+  gap: 14px;
 }
 
 .premium-tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: 100%;
   height: 100%;
   align-items: stretch;
   gap: 6px;
@@ -4075,5 +4079,142 @@ img.appbar-simple-logo {
   .auth-field-feedback,
   .auth-submit-ready {
     animation: none;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .web-dynamic-card {
+    --mouse-x: 50%;
+    --mouse-y: 50%;
+    --image-x: 0px;
+    --image-y: 0px;
+    position: relative;
+    isolation: isolate;
+  }
+
+  .web-dynamic-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(420px circle at var(--mouse-x) var(--mouse-y),
+        rgba(52, 211, 153, 0.1),
+        transparent 46%);
+    transition: opacity 180ms ease;
+  }
+
+  .web-dynamic-card>* {
+    position: relative;
+    z-index: 1;
+  }
+
+  .web-dynamic-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0;
+    background: linear-gradient(115deg,
+        transparent 20%,
+        rgba(255, 255, 255, 0.055) 46%,
+        transparent 72%);
+    transform: translateX(-34%);
+    transition: opacity 220ms ease, transform 520ms ease;
+  }
+
+  .web-dynamic-card:hover {
+    background-color: rgba(255, 255, 255, 0.035);
+    border-color: rgba(52, 211, 153, 0.16);
+    box-shadow: 0 22px 55px rgba(0, 0, 0, 0.22);
+  }
+
+  .web-dynamic-card-featured:hover {
+    border-color: rgba(252, 211, 77, 0.24);
+    box-shadow: 0 22px 55px rgba(0, 0, 0, 0.24), 0 0 0 1px rgba(252, 211, 77, 0.04);
+  }
+
+  .web-dynamic-card:hover::before {
+    opacity: 1;
+    background: radial-gradient(520px circle at var(--mouse-x) var(--mouse-y),
+        rgba(52, 211, 153, 0.17),
+        rgba(56, 189, 248, 0.07) 30%,
+        transparent 58%);
+  }
+
+  .web-dynamic-card:hover::after {
+    opacity: 1;
+    transform: translateX(34%);
+  }
+
+  .web-dynamic-card:hover .web-dynamic-image {
+    transform: translate3d(var(--image-x), var(--image-y), 0) scale(1.075);
+  }
+
+  .web-dynamic-actions {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-top-color: transparent;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transform: translateY(12px);
+    transition:
+      max-height 420ms cubic-bezier(0.22, 1, 0.36, 1),
+      padding 320ms ease,
+      border-color 240ms ease,
+      opacity 220ms ease,
+      transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .web-dynamic-card:hover .web-dynamic-actions,
+  .web-dynamic-card:focus-within .web-dynamic-actions {
+    max-height: 90px;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    border-top-color: rgba(255, 255, 255, 0.05);
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+
+  .web-dynamic-button:hover {
+    background-color: rgba(255, 255, 255, 0.07);
+    color: white;
+    transform: translateY(-1px);
+  }
+
+  .web-dynamic-button:hover .web-dynamic-refresh {
+    transform: rotate(180deg);
+  }
+
+  .web-dynamic-link:hover {
+    color: rgb(254 243 199);
+    transform: translateX(2px);
+  }
+
+  .web-dynamic-secondary:hover {
+    background-color: rgba(255, 255, 255, 0.07);
+    color: white;
+    transform: translateY(-1px);
+  }
+
+  .web-dynamic-filter:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--text-soft);
+  }
+
+  .web-dynamic-primary:hover {
+    background-color: rgba(52, 211, 153, 0.18);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 28px rgba(16, 185, 129, 0.1);
+  }
+
+  .web-dynamic-secondary:hover .web-dynamic-arrow,
+  .web-dynamic-primary:hover .web-dynamic-arrow {
+    transform: translateX(4px);
   }
 }
