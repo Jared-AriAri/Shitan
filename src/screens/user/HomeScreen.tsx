@@ -201,6 +201,57 @@ function formatDate(
   );
 }
 
+function isCauseVisibleByDate(
+  cause: {
+    fecha_inicio: string | null;
+    fecha_limite: string | null;
+  },
+  now = new Date(),
+) {
+  const nowTime =
+    now.getTime();
+
+  if (
+    cause.fecha_inicio
+  ) {
+    const start =
+      new Date(
+        cause.fecha_inicio,
+      ).getTime();
+
+    if (
+      Number.isFinite(
+        start,
+      ) &&
+      nowTime <
+      start
+    ) {
+      return false;
+    }
+  }
+
+  if (
+    cause.fecha_limite
+  ) {
+    const end =
+      new Date(
+        cause.fecha_limite,
+      ).getTime();
+
+    if (
+      Number.isFinite(
+        end,
+      ) &&
+      nowTime >
+      end
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function progressForCause(
   cause: HomeCause,
 ) {
@@ -678,6 +729,7 @@ export default function HomeScreen({
                 .in(
                   'estado',
                   [
+                    'publicado',
                     'activa',
                     'meta_alcanzada',
                     'completada',
@@ -1151,22 +1203,32 @@ export default function HomeScreen({
               0,
             );
 
+          const visibleCauses =
+            normalized.filter(
+              (
+                cause,
+              ) =>
+                isCauseVisibleByDate(
+                  cause,
+                ),
+            );
+
           setCauses(
-            normalized,
+            visibleCauses,
           );
 
           setStats({
             totalAcumulado:
               totalAccumulated,
             causasActivas:
-              normalized.filter(
+              visibleCauses.filter(
                 (
                   cause,
                 ) =>
                   !cause.fecha_completada,
               ).length,
             causasCompletadas:
-              normalized.filter(
+              visibleCauses.filter(
                 (
                   cause,
                 ) =>
@@ -1892,7 +1954,7 @@ export default function HomeScreen({
                                   />
                                 )}
 
-                                Aportar ahora
+                                Aportar
 
                                 <ArrowRight
                                   size={12}

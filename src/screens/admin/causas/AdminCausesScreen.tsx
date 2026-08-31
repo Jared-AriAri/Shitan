@@ -123,16 +123,9 @@ function normalizeStatus(
 ): CauseStatus {
     if (
         value ===
-        'esperando_aprobacion'
+        'solicitud'
     ) {
-        return 'esperando_aprobacion';
-    }
-
-    if (
-        value ===
-        'aprobado'
-    ) {
-        return 'aprobado';
+        return 'solicitud' as CauseStatus;
     }
 
     if (
@@ -140,6 +133,13 @@ function normalizeStatus(
         'publicado'
     ) {
         return 'publicado';
+    }
+
+    if (
+        value ===
+        'aprobado'
+    ) {
+        return 'aprobado';
     }
 
     return 'borrador';
@@ -150,16 +150,9 @@ function statusLabel(
 ) {
     if (
         status ===
-        'esperando_aprobacion'
+        ('solicitud' as CauseStatus)
     ) {
-        return 'Esperando aprobación';
-    }
-
-    if (
-        status ===
-        'aprobado'
-    ) {
-        return 'Aprobado';
+        return 'Solicitud';
     }
 
     if (
@@ -167,6 +160,13 @@ function statusLabel(
         'publicado'
     ) {
         return 'Publicado';
+    }
+
+    if (
+        status ===
+        'aprobado'
+    ) {
+        return 'Aprobado';
     }
 
     return 'Borrador';
@@ -177,16 +177,9 @@ function statusClass(
 ) {
     if (
         status ===
-        'esperando_aprobacion'
+        ('solicitud' as CauseStatus)
     ) {
         return 'border-amber-300/15 bg-amber-300/10 text-amber-200';
-    }
-
-    if (
-        status ===
-        'aprobado'
-    ) {
-        return 'border-cyan-300/15 bg-cyan-300/10 text-cyan-300';
     }
 
     if (
@@ -194,6 +187,13 @@ function statusClass(
         'publicado'
     ) {
         return 'border-emerald-400/15 bg-emerald-400/10 text-emerald-300';
+    }
+
+    if (
+        status ===
+        'aprobado'
+    ) {
+        return 'border-cyan-300/15 bg-cyan-300/10 text-cyan-300';
     }
 
     return 'border-slate-400/10 bg-slate-400/10 text-slate-300';
@@ -307,8 +307,8 @@ export default function AdminCausesScreen({
         );
 
     const [
-        approvingId,
-        setApprovingId,
+        publishingId,
+        setPublishingId,
     ] =
         useState<string | null>(
             null,
@@ -931,13 +931,13 @@ export default function AdminCausesScreen({
             ],
         );
 
-    const waitingCount =
+    const requestCount =
         useMemo(
             () =>
                 causes.filter(
                     (cause) =>
                         cause.estado ===
-                        'esperando_aprobacion',
+                        ('solicitud' as CauseStatus),
                 ).length,
             [
                 causes,
@@ -1005,17 +1005,17 @@ export default function AdminCausesScreen({
             );
         };
 
-    const approveCause =
+    const publishCause =
         async (
             causeId: string,
         ) => {
             if (
-                approvingId
+                publishingId
             ) {
                 return;
             }
 
-            setApprovingId(
+            setPublishingId(
                 causeId,
             );
 
@@ -1033,7 +1033,7 @@ export default function AdminCausesScreen({
                         )
                         .update({
                             estado:
-                                'aprobado',
+                                'publicado',
                             actualizado_en:
                                 now,
                         })
@@ -1043,7 +1043,7 @@ export default function AdminCausesScreen({
                         )
                         .eq(
                             'estado',
-                            'esperando_aprobacion',
+                            'solicitud',
                         )
                         .select(
                             'id,estado',
@@ -1056,7 +1056,7 @@ export default function AdminCausesScreen({
 
                 if (!data) {
                     throw new Error(
-                        'La causa ya no está esperando aprobación.',
+                        'La causa ya no está en estado de solicitud.',
                     );
                 }
 
@@ -1069,7 +1069,7 @@ export default function AdminCausesScreen({
                                     ? {
                                         ...cause,
                                         estado:
-                                            'aprobado',
+                                            'publicado',
                                         actualizado_en:
                                             now,
                                     }
@@ -1078,18 +1078,18 @@ export default function AdminCausesScreen({
                 );
 
                 showToast(
-                    'Causa aprobada correctamente.',
+                    'Causa publicada correctamente.',
                     'success',
                 );
             } catch (error) {
                 showToast(
                     error instanceof Error
                         ? error.message
-                        : 'No se pudo aprobar la causa.',
+                        : 'No se pudo publicar la causa.',
                     'error',
                 );
             } finally {
-                setApprovingId(
+                setPublishingId(
                     null,
                 );
             }
@@ -1258,21 +1258,21 @@ export default function AdminCausesScreen({
                         </h2>
 
                         {!loading &&
-                            waitingCount >
+                            requestCount >
                             0 && (
                                 <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/15 bg-amber-300/10 px-2.5 py-1 text-[7px] font-semibold text-amber-200">
                                     <Clock3
                                         size={10}
                                     />
 
-                                    {waitingCount}{' '}
-                                    por revisar
+                                    {requestCount}{' '}
+                                    solicitudes
                                 </span>
                             )}
                     </div>
 
                     <p className="mt-1 text-[9px] leading-4 text-[var(--muted)] sm:text-[10px]">
-                        Consulta, revisa, aprueba, crea, edita o elimina causas.
+                        Consulta solicitudes, revisa, publica, crea, edita o elimina causas.
                     </p>
                 </div>
 
@@ -1298,23 +1298,23 @@ export default function AdminCausesScreen({
                     type="button"
                     onClick={() =>
                         setStatusFilter(
-                            'esperando_aprobacion',
+                            'solicitud' as CauseStatusFilter,
                         )
                     }
                     className={`flex items-center justify-between rounded-2xl border p-3 text-left transition-all duration-300 ${statusFilter ===
-                            'esperando_aprobacion'
-                            ? 'border-amber-300/20 bg-amber-300/[0.07]'
-                            : 'border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.035]'
+                        ('solicitud' as CauseStatusFilter)
+                        ? 'border-amber-300/20 bg-amber-300/[0.07]'
+                        : 'border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.035]'
                         }`}
                 >
                     <div>
                         <span className="block text-[7px] font-bold uppercase tracking-[0.13em] text-[var(--muted)]">
-                            Por revisar
+                            Solicitudes
                         </span>
 
                         <strong className="mt-1 block text-lg font-bold text-amber-200">
                             {
-                                waitingCount
+                                requestCount
                             }
                         </strong>
                     </div>
@@ -1334,9 +1334,9 @@ export default function AdminCausesScreen({
                         )
                     }
                     className={`flex items-center justify-between rounded-2xl border p-3 text-left transition-all duration-300 ${statusFilter ===
-                            'aprobado'
-                            ? 'border-cyan-300/20 bg-cyan-300/[0.07]'
-                            : 'border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.035]'
+                        'aprobado'
+                        ? 'border-cyan-300/20 bg-cyan-300/[0.07]'
+                        : 'border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.035]'
                         }`}
                 >
                     <div>
@@ -1366,9 +1366,9 @@ export default function AdminCausesScreen({
                         )
                     }
                     className={`flex items-center justify-between rounded-2xl border p-3 text-left transition-all duration-300 ${statusFilter ===
-                            'publicado'
-                            ? 'border-emerald-400/20 bg-emerald-400/[0.07]'
-                            : 'border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.035]'
+                        'publicado'
+                        ? 'border-emerald-400/20 bg-emerald-400/[0.07]'
+                        : 'border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.035]'
                         }`}
                 >
                     <div>
@@ -1398,9 +1398,9 @@ export default function AdminCausesScreen({
                         )
                     }
                     className={`flex items-center justify-between rounded-2xl border p-3 text-left transition-all duration-300 ${statusFilter ===
-                            'borrador'
-                            ? 'border-slate-300/15 bg-slate-300/[0.06]'
-                            : 'border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.035]'
+                        'borrador'
+                        ? 'border-slate-300/15 bg-slate-300/[0.06]'
+                        : 'border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.035]'
                         }`}
                 >
                     <div>
@@ -1540,8 +1540,8 @@ export default function AdminCausesScreen({
                                     Todos los estados
                                 </option>
 
-                                <option value="esperando_aprobacion">
-                                    Esperando aprobación
+                                <option value="solicitud">
+                                    Solicitud
                                 </option>
 
                                 <option value="aprobado">
@@ -1627,9 +1627,9 @@ export default function AdminCausesScreen({
                                 selectedCauseId ===
                                 cause.id;
 
-                            const waiting =
+                            const request =
                                 cause.estado ===
-                                'esperando_aprobacion';
+                                ('solicitud' as CauseStatus);
 
                             const creatorName =
                                 cause.creador
@@ -1648,10 +1648,10 @@ export default function AdminCausesScreen({
                                         cause.id
                                     }
                                     className={`overflow-hidden rounded-2xl border transition-all duration-300 ${selected
-                                            ? 'border-amber-300/15 bg-white/[0.032] shadow-[0_16px_45px_rgba(0,0,0,.15)]'
-                                            : waiting
-                                                ? 'border-amber-300/[0.11] bg-amber-300/[0.018] hover:border-amber-300/[0.18]'
-                                                : 'border-white/[0.055] bg-white/[0.022] hover:border-white/[0.09] hover:bg-white/[0.03]'
+                                        ? 'border-amber-300/15 bg-white/[0.032] shadow-[0_16px_45px_rgba(0,0,0,.15)]'
+                                        : request
+                                            ? 'border-amber-300/[0.11] bg-amber-300/[0.018] hover:border-amber-300/[0.18]'
+                                            : 'border-white/[0.055] bg-white/[0.022] hover:border-white/[0.09] hover:bg-white/[0.03]'
                                         }`}
                                 >
                                     <div className="grid gap-3 p-3 sm:p-4 lg:grid-cols-[105px_minmax(220px,1.5fr)_150px_170px_140px_auto] lg:items-center">
@@ -1676,7 +1676,7 @@ export default function AdminCausesScreen({
                                                     }
                                                 </h3>
 
-                                                {waiting && (
+                                                {request && (
                                                     <span className="relative flex h-2.5 w-2.5 shrink-0">
                                                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-300 opacity-35" />
                                                         <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-300" />
@@ -1738,7 +1738,7 @@ export default function AdminCausesScreen({
                                                 )}`}
                                             >
                                                 {cause.estado ===
-                                                    'esperando_aprobacion' && (
+                                                    ('solicitud' as CauseStatus) && (
                                                         <Clock3
                                                             size={10}
                                                         />
@@ -1783,7 +1783,7 @@ export default function AdminCausesScreen({
                                         </div>
 
                                         <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
-                                            {waiting && (
+                                            {request && (
                                                 <button
                                                     type="button"
                                                     onClick={() =>
@@ -1807,7 +1807,7 @@ export default function AdminCausesScreen({
                                                 </button>
                                             )}
 
-                                            {!waiting && (
+                                            {!request && (
                                                 <>
                                                     {(cause.estado ===
                                                         'aprobado') && (
@@ -1887,7 +1887,7 @@ export default function AdminCausesScreen({
                                                     selectedCause
                                                 }
                                                 approving={
-                                                    approvingId ===
+                                                    publishingId ===
                                                     selectedCause.id
                                                 }
                                                 onClose={() =>
@@ -1896,7 +1896,7 @@ export default function AdminCausesScreen({
                                                     )
                                                 }
                                                 onApprove={() =>
-                                                    approveCause(
+                                                    publishCause(
                                                         selectedCause.id,
                                                     )
                                                 }

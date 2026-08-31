@@ -12,6 +12,7 @@ import {
     CheckCircle2,
     ChevronDown,
     CircleDollarSign,
+    FilePlus2,
     ImageIcon,
     Loader2,
     MapPin,
@@ -31,6 +32,12 @@ import type {
 import {
     supabase,
 } from '../../lib/supabase';
+
+import {
+    useAuth,
+} from '../../contexts/AuthContext';
+
+import CauseRequestForm from './CauseRequestForm';
 
 interface CausesScreenProps {
     navigate: (
@@ -196,6 +203,39 @@ function formatNumber(value: number) {
             maximumFractionDigits: 2,
         },
     ).format(value);
+}
+
+function isCauseVisibleByDate(
+    cause: {
+        fecha_inicio: string | null;
+        fecha_limite: string | null;
+    },
+) {
+    const now = Date.now();
+
+    if (cause.fecha_inicio) {
+        const start = new Date(cause.fecha_inicio).getTime();
+
+        if (
+            Number.isFinite(start) &&
+            now < start
+        ) {
+            return false;
+        }
+    }
+
+    if (cause.fecha_limite) {
+        const end = new Date(cause.fecha_limite).getTime();
+
+        if (
+            Number.isFinite(end) &&
+            now > end
+        ) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 function getProgress(cause: CauseCardData) {
@@ -629,7 +669,13 @@ export default function CausesScreen({
     navigate,
     showToast,
 }: CausesScreenProps) {
+    const {
+        profile,
+        role,
+    } = useAuth();
+
     const [causes, setCauses] = useState<CauseCardData[]>([]);
+    const [requestFormOpen, setRequestFormOpen] = useState(false);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [search, setSearch] = useState('');
@@ -652,6 +698,7 @@ export default function CausesScreen({
                         'id,slug,titulo,resumen,categoria,estado,meta_economica,organizador,beneficiario,ubicacion,fecha_inicio,fecha_limite,fecha_completada,destacada,orden,tipo_meta,creado_en',
                     )
                     .in('estado', [
+                        'publicado',
                         'activa',
                         'meta_alcanzada',
                         'completada',
@@ -664,7 +711,11 @@ export default function CausesScreen({
                     throw error;
                 }
 
-                const rows = (data ?? []) as CauseRow[];
+                const rows = ((data ?? []) as CauseRow[]).filter(
+                    (cause) =>
+                        isCauseVisibleByDate(cause),
+                );
+
                 const causeIds = rows.map((cause) => cause.id);
 
                 let images: CauseImageRow[] = [];
@@ -961,6 +1012,14 @@ export default function CausesScreen({
         category !== 'todas' ||
         sortMode !== 'prioridad';
 
+    const canRequestCause =
+        (
+            profile?.role ??
+            role ??
+            'donante'
+        ) ===
+        'donante';
+
     if (loading) {
         return (
             <div className="flex min-h-[65vh] items-center justify-center">
@@ -1146,6 +1205,63 @@ export default function CausesScreen({
         .causes-stat.is-completed {
           --stat-color: #67e8f9;
           --stat-text: #a5f3fc;
+        }
+
+        .causes-request-cta {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          margin-top: 12px;
+          padding: 14px 16px;
+          border: 1px solid rgba(251,113,133,.08);
+          border-radius: 20px;
+          background: rgba(255,255,255,.018);
+        }
+
+        .causes-request-cta-copy {
+          min-width: 0;
+        }
+
+        .causes-request-cta-kicker {
+          display: block;
+          color: #fda4af;
+          font-size: 7px;
+          font-weight: 800;
+          letter-spacing: .14em;
+          text-transform: uppercase;
+        }
+
+        .causes-request-cta strong {
+          display: block;
+          margin-top: 4px;
+          color: var(--text);
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .causes-request-cta p {
+          max-width: 680px;
+          margin: 4px 0 0;
+          color: var(--muted);
+          font-size: 8px;
+          line-height: 1.65;
+        }
+
+        .causes-request-button {
+          display: inline-flex;
+          min-height: 42px;
+          flex: 0 0 auto;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 0 14px;
+          border: 1px solid rgba(251,113,133,.13);
+          border-radius: 13px;
+          color: #fecdd3;
+          background: rgba(251,113,133,.08);
+          font-size: 8px;
+          font-weight: 800;
         }
 
         .causes-toolbar {
@@ -1984,6 +2100,37 @@ export default function CausesScreen({
                 </div>
             </section>
 
+            {canRequestCause && (
+                <section className="causes-request-cta">
+                    <div className="causes-request-cta-copy">
+                        <span className="causes-request-cta-kicker">
+                            ¿Conoces una necesidad?
+                        </span>
+
+                        <strong>
+                            Propón una nueva causa
+                        </strong>
+
+                        <p>
+                            Envía la información para que el equipo de Shitan Trust pueda revisarla antes de publicarla.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={() =>
+                            setRequestFormOpen(
+                                true,
+                            )
+                        }
+                        className="causes-request-button"
+                    >
+                        <FilePlus2 size={15} />
+                        Proponer una causa
+                    </button>
+                </section>
+            )}
+
             <section className="causes-toolbar">
                 <div className="causes-search-row">
                     <div className="causes-search-box">
@@ -2121,6 +2268,20 @@ export default function CausesScreen({
                     </button>
                 </div>
             )}
+
+            <CauseRequestForm
+                open={
+                    requestFormOpen
+                }
+                onClose={() =>
+                    setRequestFormOpen(
+                        false,
+                    )
+                }
+                showToast={
+                    showToast
+                }
+            />
         </div>
     );
 }

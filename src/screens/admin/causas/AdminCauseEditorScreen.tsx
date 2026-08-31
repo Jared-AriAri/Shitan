@@ -17,6 +17,8 @@ import {
     ChevronDown,
     CircleDollarSign,
     FileEdit,
+    ExternalLink,
+    FileText,
     Gift,
     HeartHandshake,
     ImagePlus,
@@ -43,6 +45,7 @@ type MetaType =
     | 'especie';
 
 type Status =
+    | 'solicitud'
     | 'borrador'
     | 'publicado';
 
@@ -114,10 +117,38 @@ interface RemovedCauseImage {
     storagePath: string;
 }
 
+interface CauseFile {
+    id?: string;
+    key: string;
+    file?: File;
+    storagePath?: string;
+    publicUrl?: string;
+    name: string;
+    mimeType: string;
+    size: number;
+    order: number;
+}
+
+interface RemovedCauseFile {
+    id: string;
+    storagePath: string;
+}
+
 const IMAGE_BUCKET = 'causas-imagenes';
+const FILE_BUCKET = 'causas-archivos';
 const MAX_IMAGES = 8;
 const MAX_IMAGE_SIZE = 8 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/avif',
+];
+
+const MAX_FILES = 8;
+const MAX_FILE_SIZE = 15 * 1024 * 1024;
+const ALLOWED_FILE_TYPES = [
+    'application/pdf',
     'image/jpeg',
     'image/png',
     'image/webp',
@@ -376,6 +407,26 @@ export default function AdminCauseEditorScreen({
             null,
         );
 
+    const [
+        files,
+        setFiles,
+    ] = useState<CauseFile[]>([]);
+
+    const [
+        removedFiles,
+        setRemovedFiles,
+    ] = useState<RemovedCauseFile[]>([]);
+
+    const [
+        draggingFiles,
+        setDraggingFiles,
+    ] = useState(false);
+
+    const fileInputRef =
+        useRef<HTMLInputElement | null>(
+            null,
+        );
+
     const slug =
         useMemo(
             () =>
@@ -505,6 +556,7 @@ export default function AdminCauseEditorScreen({
                         form.fecha_limite,
                     ),
                     images.length > 0,
+                    files.length > 0,
                     form.tipo_meta ===
                         'economica'
                         ? Number(
@@ -695,6 +747,14 @@ export default function AdminCauseEditorScreen({
                             [],
                         );
 
+                        setFiles(
+                            [],
+                        );
+
+                        setRemovedFiles(
+                            [],
+                        );
+
                         setOrder(
                             (data?.[0]
                                 ?.orden ??
@@ -708,6 +768,7 @@ export default function AdminCauseEditorScreen({
                         causeResult,
                         productsResult,
                         imagesResult,
+                        filesResult,
                     ] =
                         await Promise.all([
                             supabase
@@ -756,6 +817,25 @@ export default function AdminCauseEditorScreen({
                                             true,
                                     },
                                 ),
+
+                            supabase
+                                .from(
+                                    'archivos_causa',
+                                )
+                                .select(
+                                    'id,storage_path,public_url,nombre_archivo,mime_type,size_bytes,orden',
+                                )
+                                .eq(
+                                    'causa_id',
+                                    causeId,
+                                )
+                                .order(
+                                    'orden',
+                                    {
+                                        ascending:
+                                            true,
+                                    },
+                                ),
                         ]);
 
                     if (
@@ -774,6 +854,12 @@ export default function AdminCauseEditorScreen({
                         imagesResult.error
                     ) {
                         throw imagesResult.error;
+                    }
+
+                    if (
+                        filesResult.error
+                    ) {
+                        throw filesResult.error;
                     }
 
                     const cause =
@@ -809,7 +895,10 @@ export default function AdminCauseEditorScreen({
                             cause.estado ===
                                 'publicado'
                                 ? 'publicado'
-                                : 'borrador',
+                                : cause.estado ===
+                                    'solicitud'
+                                    ? 'solicitud'
+                                    : 'borrador',
                         tipo_meta:
                             cause.tipo_meta ===
                                 'especie'
@@ -949,6 +1038,48 @@ export default function AdminCauseEditorScreen({
                     setRemovedImages(
                         [],
                     );
+
+                    setFiles(
+                        (
+                            filesResult.data ??
+                            []
+                        ).map(
+                            (
+                                item,
+                                index,
+                            ) => ({
+                                id:
+                                    item.id,
+                                key:
+                                    item.id,
+                                storagePath:
+                                    item.storage_path,
+                                publicUrl:
+                                    item.public_url,
+                                name:
+                                    item.nombre_archivo ??
+                                    `Archivo ${index + 1}`,
+                                mimeType:
+                                    item.mime_type ??
+                                    'application/octet-stream',
+                                size:
+                                    Number(
+                                        item.size_bytes ??
+                                        0,
+                                    ),
+                                order:
+                                    Number(
+                                        item.orden ??
+                                        index,
+                                    ),
+                            }),
+                        ),
+                    );
+
+                    setRemovedFiles(
+                        [],
+                    );
+
                 } catch (error) {
                     showToast(
                         error instanceof
@@ -1347,6 +1478,411 @@ export default function AdminCauseEditorScreen({
                         .files,
                 ),
             );
+        };
+
+    const addFiles =
+        (
+            selectedFiles: File[],
+        ) => {
+            if (
+                !selectedFiles.length
+            ) {
+                return;
+            }
+
+            const available =
+                MAX_FILES -
+                files.length;
+
+            if (
+                available <= 0
+            ) {
+                showToast(
+                    `Puedes agregar máximo ${MAX_FILES} archivos.`,
+                    'warning',
+                );
+
+                return;
+            }
+
+            const accepted:
+                File[] =
+                [];
+
+            for (
+                const file of
+                selectedFiles
+            ) {
+                if (
+                    !ALLOWED_FILE_TYPES.includes(
+                        file.type,
+                    )
+                ) {
+                    showToast(
+                        `${file.name}: formato no permitido.`,
+                        'warning',
+                    );
+
+                    continue;
+                }
+
+                if (
+                    file.size >
+                    MAX_FILE_SIZE
+                ) {
+                    showToast(
+                        `${file.name}: supera el límite de 15 MB.`,
+                        'warning',
+                    );
+
+                    continue;
+                }
+
+                const duplicated =
+                    files.some(
+                        (
+                            item,
+                        ) =>
+                            item.name ===
+                            file.name &&
+                            item.size ===
+                            file.size,
+                    ) ||
+                    accepted.some(
+                        (
+                            item,
+                        ) =>
+                            item.name ===
+                            file.name &&
+                            item.size ===
+                            file.size,
+                    );
+
+                if (
+                    duplicated
+                ) {
+                    continue;
+                }
+
+                accepted.push(
+                    file,
+                );
+            }
+
+            const limited =
+                accepted.slice(
+                    0,
+                    available,
+                );
+
+            if (
+                accepted.length >
+                available
+            ) {
+                showToast(
+                    `Solo se agregaron ${available} archivos para respetar el límite de ${MAX_FILES}.`,
+                    'warning',
+                );
+            }
+
+            if (
+                !limited.length
+            ) {
+                return;
+            }
+
+            setFiles(
+                (
+                    current,
+                ) => [
+                        ...current,
+                        ...limited.map(
+                            (
+                                file,
+                                index,
+                            ) => ({
+                                key:
+                                    createKey(),
+                                file,
+                                name:
+                                    file.name,
+                                mimeType:
+                                    file.type ||
+                                    'application/octet-stream',
+                                size:
+                                    file.size,
+                                order:
+                                    current.length +
+                                    index,
+                            }),
+                        ),
+                    ],
+            );
+        };
+
+    const removeFile =
+        (
+            fileKey: string,
+        ) => {
+            setFiles(
+                (
+                    current,
+                ) => {
+                    const target =
+                        current.find(
+                            (
+                                item,
+                            ) =>
+                                item.key ===
+                                fileKey,
+                        );
+
+                    if (
+                        !target
+                    ) {
+                        return current;
+                    }
+
+                    if (
+                        target.id &&
+                        target.storagePath
+                    ) {
+                        const removedFile: RemovedCauseFile = {
+                            id: target.id,
+                            storagePath: target.storagePath,
+                        };
+                        setRemovedFiles(
+                            (
+                                removed,
+                            ) => [
+                                    ...removed,
+                                    removedFile,
+                                ],
+                        );
+                    }
+
+                    return current
+                        .filter(
+                            (
+                                item,
+                            ) =>
+                                item.key !==
+                                fileKey,
+                        )
+                        .map(
+                            (
+                                item,
+                                index,
+                            ) => ({
+                                ...item,
+                                order:
+                                    index,
+                            }),
+                        );
+                },
+            );
+        };
+
+    const handleFileDrop =
+        (
+            event:
+                DragEvent<HTMLDivElement>,
+        ) => {
+            event.preventDefault();
+            event.stopPropagation();
+
+            setDraggingFiles(
+                false,
+            );
+
+            if (
+                saving
+            ) {
+                return;
+            }
+
+            addFiles(
+                Array.from(
+                    event.dataTransfer
+                        .files,
+                ),
+            );
+        };
+
+    const saveFiles =
+        async (
+            targetCauseId: string,
+        ) => {
+            if (
+                removedFiles.length
+            ) {
+                const dbDelete =
+                    await supabase
+                        .from(
+                            'archivos_causa',
+                        )
+                        .delete()
+                        .in(
+                            'id',
+                            removedFiles.map(
+                                (
+                                    item,
+                                ) =>
+                                    item.id,
+                            ),
+                        );
+
+                if (
+                    dbDelete.error
+                ) {
+                    throw dbDelete.error;
+                }
+
+                const storageDelete =
+                    await supabase.storage
+                        .from(
+                            FILE_BUCKET,
+                        )
+                        .remove(
+                            removedFiles.map(
+                                (
+                                    item,
+                                ) =>
+                                    item.storagePath,
+                            ),
+                        );
+
+                if (
+                    storageDelete.error
+                ) {
+                    throw storageDelete.error;
+                }
+            }
+
+            for (
+                let index = 0;
+                index <
+                files.length;
+                index += 1
+            ) {
+                const item =
+                    files[index];
+
+                if (
+                    item.file
+                ) {
+                    const extension =
+                        item.file.name
+                            .split('.')
+                            .pop()
+                            ?.toLowerCase() ||
+                        item.mimeType
+                            .split('/')
+                            .pop() ||
+                        'bin';
+
+                    const storagePath =
+                        `${targetCauseId}/${Date.now()}-${createKey()}.${extension}`;
+
+                    const uploadResult =
+                        await supabase.storage
+                            .from(
+                                FILE_BUCKET,
+                            )
+                            .upload(
+                                storagePath,
+                                item.file,
+                                {
+                                    cacheControl:
+                                        '3600',
+                                    upsert:
+                                        false,
+                                    contentType:
+                                        item.mimeType,
+                                },
+                            );
+
+                    if (
+                        uploadResult.error
+                    ) {
+                        throw uploadResult.error;
+                    }
+
+                    const {
+                        data:
+                        publicUrlData,
+                    } =
+                        supabase.storage
+                            .from(
+                                FILE_BUCKET,
+                            )
+                            .getPublicUrl(
+                                storagePath,
+                            );
+
+                    const insertResult =
+                        await supabase
+                            .from(
+                                'archivos_causa',
+                            )
+                            .insert({
+                                causa_id:
+                                    targetCauseId,
+                                storage_path:
+                                    storagePath,
+                                public_url:
+                                    publicUrlData.publicUrl,
+                                nombre_archivo:
+                                    item.name,
+                                mime_type:
+                                    item.mimeType,
+                                size_bytes:
+                                    item.size,
+                                orden:
+                                    index,
+                            });
+
+                    if (
+                        insertResult.error
+                    ) {
+                        await supabase.storage
+                            .from(
+                                FILE_BUCKET,
+                            )
+                            .remove([
+                                storagePath,
+                            ]);
+
+                        throw insertResult.error;
+                    }
+
+                    continue;
+                }
+
+                if (
+                    item.id
+                ) {
+                    const updateResult =
+                        await supabase
+                            .from(
+                                'archivos_causa',
+                            )
+                            .update({
+                                orden:
+                                    index,
+                            })
+                            .eq(
+                                'id',
+                                item.id,
+                            );
+
+                    if (
+                        updateResult.error
+                    ) {
+                        throw updateResult.error;
+                    }
+                }
+            }
         };
 
     const saveImages =
@@ -1857,6 +2393,10 @@ export default function AdminCauseEditorScreen({
                     targetCauseId,
                 );
 
+                await saveFiles(
+                    targetCauseId,
+                );
+
                 showToast(
                     editing
                         ? 'Causa actualizada correctamente.'
@@ -1985,7 +2525,10 @@ export default function AdminCauseEditorScreen({
                             {form.estado ===
                                 'publicado'
                                 ? 'Publicado'
-                                : 'Borrador'}
+                                : form.estado ===
+                                    'solicitud'
+                                    ? 'Solicitud'
+                                    : 'Borrador'}
                         </span>
 
                         <span className="rounded-full bg-white/[0.04] px-2.5 py-1.5 text-[8px] font-semibold text-[var(--muted)]">
@@ -2200,6 +2743,10 @@ export default function AdminCauseEditorScreen({
                                                     }
                                                     className={`${inputClass} appearance-none pr-10`}
                                                 >
+                                                    <option value="solicitud">
+                                                        Solicitud
+                                                    </option>
+
                                                     <option value="borrador">
                                                         Borrador
                                                     </option>
@@ -2571,6 +3118,294 @@ export default function AdminCauseEditorScreen({
                                                 </div>
                                             </div>
                                         )}
+                                </section>
+
+                                <section className="rounded-2xl border border-white/[0.055] bg-white/[0.022] p-4 sm:rounded-3xl sm:p-6">
+                                    <div className="mb-4 flex items-center justify-between gap-3">
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-400/[0.08] text-violet-300">
+                                                <FileText
+                                                    size={18}
+                                                />
+                                            </div>
+
+                                            <div className="min-w-0">
+                                                <span className="text-[8px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
+                                                    Documentación
+                                                </span>
+
+                                                <h2 className="text-sm font-semibold text-[var(--text)]">
+                                                    Archivos de la causa
+                                                </h2>
+
+                                                <span className="text-[8px] text-[var(--muted)]">
+                                                    Puedes ver, agregar o eliminar archivos
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <span className="shrink-0 rounded-full bg-violet-400/[0.08] px-2.5 py-1 text-[8px] font-semibold text-violet-300">
+                                            {files.length}/{MAX_FILES}
+                                        </span>
+                                    </div>
+
+                                    <input
+                                        ref={
+                                            fileInputRef
+                                        }
+                                        type="file"
+                                        accept="application/pdf,image/jpeg,image/png,image/webp,image/avif"
+                                        multiple
+                                        className="hidden"
+                                        onChange={(
+                                            event,
+                                        ) => {
+                                            addFiles(
+                                                Array.from(
+                                                    event.target.files ??
+                                                    [],
+                                                ),
+                                            );
+
+                                            event.target.value =
+                                                '';
+                                        }}
+                                    />
+
+                                    <div
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => {
+                                            if (
+                                                !saving &&
+                                                files.length <
+                                                MAX_FILES
+                                            ) {
+                                                fileInputRef.current?.click();
+                                            }
+                                        }}
+                                        onKeyDown={(
+                                            event,
+                                        ) => {
+                                            if (
+                                                event.key ===
+                                                'Enter' ||
+                                                event.key ===
+                                                ' '
+                                            ) {
+                                                event.preventDefault();
+
+                                                if (
+                                                    !saving &&
+                                                    files.length <
+                                                    MAX_FILES
+                                                ) {
+                                                    fileInputRef.current?.click();
+                                                }
+                                            }
+                                        }}
+                                        onDragEnter={(
+                                            event,
+                                        ) => {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+
+                                            if (
+                                                !saving
+                                            ) {
+                                                setDraggingFiles(
+                                                    true,
+                                                );
+                                            }
+                                        }}
+                                        onDragOver={(
+                                            event,
+                                        ) => {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+
+                                            if (
+                                                !saving
+                                            ) {
+                                                event.dataTransfer.dropEffect =
+                                                    'copy';
+
+                                                setDraggingFiles(
+                                                    true,
+                                                );
+                                            }
+                                        }}
+                                        onDragLeave={(
+                                            event,
+                                        ) => {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+
+                                            if (
+                                                event.currentTarget ===
+                                                event.target
+                                            ) {
+                                                setDraggingFiles(
+                                                    false,
+                                                );
+                                            }
+                                        }}
+                                        onDrop={
+                                            handleFileDrop
+                                        }
+                                        className={`group flex min-h-32 w-full cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed px-4 py-5 text-center outline-none transition-all duration-300 ${draggingFiles
+                                            ? 'border-violet-400/45 bg-violet-400/[0.08]'
+                                            : 'border-white/[0.09] bg-white/[0.015] hover:border-violet-400/25 hover:bg-violet-400/[0.025]'
+                                            } ${saving ||
+                                                files.length >=
+                                                MAX_FILES
+                                                ? 'cursor-not-allowed opacity-60'
+                                                : ''
+                                            }`}
+                                    >
+                                        <div
+                                            className={`grid h-11 w-11 place-items-center rounded-2xl transition-all duration-300 ${draggingFiles
+                                                ? 'scale-110 bg-violet-400/15 text-violet-300'
+                                                : 'bg-white/[0.04] text-[var(--muted)] group-hover:-translate-y-0.5 group-hover:bg-violet-400/10 group-hover:text-violet-300'
+                                                }`}
+                                        >
+                                            <UploadCloud
+                                                size={20}
+                                                strokeWidth={
+                                                    1.7
+                                                }
+                                            />
+                                        </div>
+
+                                        <span className="mt-3 text-[10px] font-semibold text-[var(--text-soft)]">
+                                            {draggingFiles
+                                                ? 'Suelta los archivos aquí'
+                                                : files.length >=
+                                                    MAX_FILES
+                                                    ? 'Límite de archivos alcanzado'
+                                                    : 'Arrastra archivos aquí'}
+                                        </span>
+
+                                        <span className="mt-1 text-[8px] text-[var(--muted)]">
+                                            PDF, JPG, PNG, WebP o AVIF · máximo 15 MB
+                                        </span>
+                                    </div>
+
+                                    {files.length > 0 && (
+                                        <div className="mt-4 space-y-2">
+                                            {files.map(
+                                                (
+                                                    item,
+                                                    index,
+                                                ) => (
+                                                    <div
+                                                        key={
+                                                            item.key
+                                                        }
+                                                        className="flex items-center gap-3 rounded-xl border border-white/[0.05] bg-white/[0.02] p-3"
+                                                    >
+                                                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-400/[0.08] text-violet-300">
+                                                            <FileText
+                                                                size={15}
+                                                            />
+                                                        </div>
+
+                                                        <div className="min-w-0 flex-1">
+                                                            {item.publicUrl ? (
+                                                                <a
+                                                                    href={
+                                                                        item.publicUrl
+                                                                    }
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="block truncate text-[9px] font-semibold text-[var(--text-soft)] transition hover:text-violet-300"
+                                                                >
+                                                                    {item.name}
+                                                                </a>
+                                                            ) : (
+                                                                <span className="block truncate text-[9px] font-semibold text-[var(--text-soft)]">
+                                                                    {item.name}
+                                                                </span>
+                                                            )}
+
+                                                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[7px] text-[var(--muted)]">
+                                                                <span>
+                                                                    Archivo {index + 1}
+                                                                </span>
+
+                                                                <span>
+                                                                    {item.mimeType ===
+                                                                        'application/pdf'
+                                                                        ? 'PDF'
+                                                                        : item.mimeType
+                                                                            .split('/')
+                                                                            .pop()
+                                                                            ?.toUpperCase() ??
+                                                                        'ARCHIVO'}
+                                                                </span>
+
+                                                                <span>
+                                                                    {item.size
+                                                                        ? item.size <
+                                                                            1024 *
+                                                                            1024
+                                                                            ? `${Math.max(
+                                                                                1,
+                                                                                Math.round(
+                                                                                    item.size /
+                                                                                    1024,
+                                                                                ),
+                                                                            )} KB`
+                                                                            : `${(
+                                                                                item.size /
+                                                                                1024 /
+                                                                                1024
+                                                                            ).toFixed(
+                                                                                1,
+                                                                            )} MB`
+                                                                        : 'Guardado'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        {item.publicUrl && (
+                                                            <a
+                                                                href={
+                                                                    item.publicUrl
+                                                                }
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/[0.04] text-[var(--muted)] transition-all hover:bg-violet-400/10 hover:text-violet-300"
+                                                                aria-label="Abrir archivo"
+                                                            >
+                                                                <ExternalLink
+                                                                    size={13}
+                                                                />
+                                                            </a>
+                                                        )}
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                removeFile(
+                                                                    item.key,
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                saving
+                                                            }
+                                                            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-rose-400/[0.07] text-rose-300 transition-all hover:bg-rose-400/[0.13] disabled:opacity-50"
+                                                            aria-label="Eliminar archivo"
+                                                        >
+                                                            <Trash2
+                                                                size={13}
+                                                            />
+                                                        </button>
+                                                    </div>
+                                                ),
+                                            )}
+                                        </div>
+                                    )}
                                 </section>
 
                                 <section className="rounded-2xl border border-white/[0.055] bg-white/[0.022] p-4 sm:rounded-3xl sm:p-6">
@@ -3313,7 +4148,20 @@ export default function AdminCauseEditorScreen({
                                                 {form.estado ===
                                                     'publicado'
                                                     ? 'Publicado'
-                                                    : 'Borrador'}
+                                                    : form.estado ===
+                                                        'solicitud'
+                                                        ? 'Solicitud'
+                                                        : 'Borrador'}
+                                            </span>
+                                        </div>
+
+                                        <div className="flex justify-between gap-3">
+                                            <span className="text-[var(--muted)]">
+                                                Archivos
+                                            </span>
+
+                                            <span className="font-semibold text-[var(--text-soft)]">
+                                                {files.length}
                                             </span>
                                         </div>
 
